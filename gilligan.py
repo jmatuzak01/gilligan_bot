@@ -1,10 +1,22 @@
 # bot.py
-import os,random,asyncio,discord,yt_dlp
+import os,random,asyncio,discord,yt_dlp,logging
 from discord.ext import commands
 from dotenv import load_dotenv
+from logging.handlers import RotatingFileHandler
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
+
+logger = logging.getLogger('gilligan_bot')
+logger.setLevel(logging.DEBUG)
+formatter = logging.Formatter('&#%(asctime)s - %(levelname)s - %(message)s, datefmt="%Y-%m-%d %H:%M:%S')
+file_handler = RotatingFileHandler('gilligan.log', maxBytes=5*1024*1024, backupCount=2,encoding='utf-8')
+file_handler.setFormatter(formatter)
+
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -61,14 +73,15 @@ async def get_audio_data(query):
 
     is_playlist = "playlist" in query.lower() or "list=" in query.lower()
     extractor = ytdl_playlist if is_playlist else ytdl
-
+    logger.info(f"Fetching audio data for query: {query}")
     try:
         data = await loop.run_in_executor(
             None,
             lambda: extractor.extract_info(query, download=False)
         )
     except yt_dlp.utils.DownloadError as e:
-        raise ValueError(f"Could not retrieve audio: {e}")
+        logger.error(f"Failed to fetch audio data for query: '{query}': {e}")
+        raise ValueError(f"Failed to fetch audio data for query: {e}")
 
     songs = []
     if 'entries' in data:
@@ -85,6 +98,7 @@ async def get_audio_data(query):
     return songs
 
 async def resolve_song_url(url: str) -> str:
+    logger.debug(f"Resolving audio URL: {url}")
     loop = asyncio.get_running_loop()
     try:
         data = await loop.run_in_executor(
@@ -93,11 +107,12 @@ async def resolve_song_url(url: str) -> str:
         )
         return data['url']
     except yt_dlp.utils.DownloadError as e:
+        logger.error(f"Could not resolve audio URL: '{url}': {e}")
         raise ValueError(f"Could not resolve audio URL: {e}")
     
 async def play_next(ctx):
     guild_id = ctx.guild.id
-
+    logger.debug(f"[Guild {guild_id}] play_next called")
     if is_stopping.get(guild_id):
         return
     
@@ -120,6 +135,7 @@ async def play_next(ctx):
             audio_url = await resolve_song_url(next_song["url"])
             break  # successfully resolved, exit the loop
         except ValueError as e:
+            logger.warning(f"[Guild {guild_id}] Skipping '{next_song['title']}': {e}")
             await ctx.send(f"Skipping **{next_song['title']}**: {e}")
             continue  # try the next song
 
@@ -129,7 +145,10 @@ async def play_next(ctx):
         discord.FFmpegPCMAudio(audio_url, **ffmpeg_options),
         volume=volume
     )
-
+    #STOPED LOGGING FOR NOW
+    #^^^^^^^^^^^^^^^^^^^^^^
+    #
+    logger.info(f"[Guild {guild_id}] Now playing: {next_song['title']} (requested by {ctx.author})")
     ctx.voice_client.play(
         source,
         after=lambda e: (
