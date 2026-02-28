@@ -9,7 +9,10 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 
 logger = logging.getLogger('gilligan_bot')
 logger.setLevel(logging.DEBUG)
-formatter = logging.Formatter('&#%(asctime)s - %(levelname)s - %(message)s, datefmt="%Y-%m-%d %H:%M:%S')
+formatter = logging.Formatter(
+    fmt='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 file_handler = RotatingFileHandler('gilligan.log', maxBytes=5*1024*1024, backupCount=2,encoding='utf-8')
 file_handler.setFormatter(formatter)
 
@@ -66,6 +69,10 @@ ffmpeg_options = {
 
 ytdl_playlist = yt_dlp.YoutubeDL(ytdl_playlist_options)
 ytdl = yt_dlp.YoutubeDL(ytdl_options)
+
+#===========================================
+# ---------------- HELPERS -----------------
+#===========================================
 
 async def get_audio_data(query):
     MAX_PLAYLIST_SIZE = 100
@@ -151,12 +158,197 @@ async def play_next(ctx):
     ctx.voice_client.play(
         source,
         after=lambda e: (
-            print(f"Player error: {e}") if e else None,
+            logger.error(f"[Guild {guild_id}] Player error: {e}") if e else None,
             asyncio.run_coroutine_threadsafe(play_next(ctx), bot.loop)
         )
     )
     await ctx.send(f"Now Playing: **{next_song['title']}**")
 
+def format_duration(seconds: int) -> str:
+    if not seconds:
+        return "Unknown"
+    minutes, secs = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}:{minutes:02}:{secs:02}"
+    return f"{minutes}:{secs:02}"
+
+#===========================================
+# ---------------- BASE VIEW ---------------
+#===========================================
+class PagedView(discord.ui.View):
+    """Base class for paginated views."""
+    def __init__(self, ctx, items, page_size, timeout=60):
+        super().__init__(timeout=timeout)
+        self.ctx = ctx
+        self.items = items
+        self.page = 0
+        self.page_size = page_size
+        self.total_pages = (len(items) + page_size - 1) // page_size
+        self.message = None
+        self.update_buttons()
+
+    def update_buttons(self):
+        self.clear_items()
+        self.add_page_buttons()
+
+    def add_page_buttons(self):
+        prev_button = discord.ui.Button(
+            label="◀ Previous",
+            style=discord.ButtonStyle.blurple,
+            disabled=self.page == 0,
+            custom_id="prev"
+        )
+        prev_button.callback = self.prev_page
+        self.add_item(prev_button)
+
+        page_button = discord.ui.Button(
+            label=f"Page {self.page + 1}/{self.total_pages}",
+            style=discord.ButtonStyle.grey,
+            disabled=True,
+            custom_id="page_indicator"
+        )
+        self.add_item(page_button)
+
+        next_button = discord.ui.Button(
+            label="Next ▶",
+            style=discord.ButtonStyle.blurple,
+            disabled=self.page >= self.total_pages - 1,
+            custom_id="next"
+        )
+        next_button.callback = self.next_page
+        self.add_item(next_button)
+
+    def build_embed(self):
+        raise NotImplementedError("Subclasses must implement build_embed()")
+
+    async def prev_page(self, interaction: discord.Interaction):
+        if interaction.user != self.ctx.author:
+            await interaction.response.send_message(
+                "Only the original user can change pages.", ephemeral=True
+            )
+            return
+        self.page -= 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    async def next_page(self, interaction: discord.Interaction):
+        if interaction.user != self.ctx.author:
+            await interaction.response.send_message(
+                "Only the original user can change pages.", ephemeral=True
+            )
+            return
+        self.page += 1
+        self.update_buttons()
+        await interaction.response.edit_message(embed=self.build_embed(), view=self)
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        try:
+            await self.message.edit(view=self)
+        except discord.NotFound:
+            pass
+
+#=========
+# SEARCH VIEW
+#=========
+class SearchView(PagedView):
+    def __init__(self, ctx, results):
+        super().__init__(ctx, results, page_size=5)
+
+    def update_buttons(self):
+        self.clear_items()
+
+        start = self.page * self.page_size
+        end = min(start + self.page_size, len(self.items))
+
+        for i in range(end - start):
+            button = discord.ui.Button(
+                label=f"Add #{start + i + 1}",
+                style=discord.ButtonStyle.green,
+                custom_id=f"add_{start + i}"
+            )
+            button.callback = self.make_add_callback(start + i)
+            self.add_item(button)
+
+        self.add_page_buttons()
+
+    def make_add_callback(self, index):
+        async def callback(interaction: discord.Interaction):
+            if interaction.user != self.ctx.author:
+                await interaction.response.send_message(
+                    "Only the person who searched can add songs.", ephemeral=True
+                )
+                return
+            if not interaction.user.voice:
+                await interaction.response.send_message(
+                    "You must be in a voice channel.", ephemeral=True
+                )
+                return
+
+            song = self.items[index]
+            guild_id = self.ctx.guild.id
+
+            if guild_id not in music_queues:
+                music_queues[guild_id] = []
+
+            if self.ctx.voice_client is None:
+                await interaction.user.voice.channel.connect()
+            elif self.ctx.voice_client.channel != interaction.user.voice.channel:
+                await self.ctx.voice_client.move_to(interaction.user.voice.channel)
+
+            music_queues[guild_id].append(song)
+            await interaction.response.send_message(f"Added to queue: **{song['title']}**")
+
+            if not self.ctx.voice_client.is_playing():
+                await play_next(self.ctx)
+
+        return callback
+
+    def build_embed(self):
+        start = self.page * self.page_size
+        end = min(start + self.page_size, len(self.items))
+
+        embed = discord.Embed(
+            title="🔎 Search Results",
+            description=f"Showing results {start + 1}–{end} of {len(self.items)}",
+            color=discord.Color.blurple()
+        )
+        for i, song in enumerate(self.items[start:end]):
+            duration = format_duration(song.get("duration", 0))
+            embed.add_field(
+                name=f"{start + i + 1}. {song['title']}",
+                value=f"By {song.get('uploader', 'Unknown')} | Duration: {duration}",
+                inline=False
+            )
+        embed.set_footer(text="Buttons expire after 60 seconds.")
+        return embed
+
+#=========
+# QUEUE VIEW
+#=========
+class QueueView(PagedView):
+    def __init__(self, ctx, songs):
+        super().__init__(ctx, songs, page_size=25)
+
+    def build_embed(self):
+        start = self.page * self.page_size
+        end = min(start + self.page_size, len(self.items))
+
+        embed = discord.Embed(
+            title="🎵 Music Queue",
+            description=f"Showing songs {start + 1}–{end} of {len(self.items)}",
+            color=discord.Color.blurple()
+        )
+        for i, song in enumerate(self.items[start:end]):
+            embed.add_field(
+                name=f"{start + i + 1}.",
+                value=song["title"],
+                inline=False
+            )
+        embed.set_footer(text="Buttons expire after 60 seconds.")
+        return embed
 #===========================================
 # ---------------- COMMANDS ----------------
 #===========================================
@@ -286,24 +478,9 @@ async def queue(ctx):
         await ctx.send("The queue is empty.")
         return
 
-    songs = music_queues[guild_id]
-    chunks = [songs[i:i+25] for i in range(0, len(songs), 25)]
-
-    for page, chunk in enumerate(chunks):
-        embed = discord.Embed(
-            title=f"Music Queue (Page {page + 1}/{len(chunks)})",
-            color=discord.Color.blurple()
-        )
-
-        for index, song in enumerate(chunk):
-            global_index = page * 25 + index + 1
-            embed.add_field(
-                name=f"{global_index}.",
-                value=song["title"],
-                inline=False
-            )
-
-        await ctx.send(embed=embed)
+    view = QueueView(ctx, music_queues[guild_id])
+    message = await ctx.send(embed=view.build_embed(), view=view)
+    view.message = message
 
 #=========
 # CLEAR QUEUE
@@ -396,7 +573,7 @@ async def stop(ctx):
 async def volume(ctx, volume: int = None):
     vc = ctx.voice_client
 
-    if not vc or not vc.is_playing() or vc.is_paused():
+    if not vc or not (vc.is_playing() or vc.is_paused()):
         await ctx.send("Nothing is playing.")
         return
     
@@ -427,6 +604,51 @@ async def shuffle(ctx):
 
     random.shuffle(music_queues[guild_id])
     await ctx.send("The queue has been shuffled.")
+
+#=========
+# SEARCH
+#=========
+@bot.command(help="Search YouTube for a song and add it to the queue.\n Example: `!search never gonna give you up`")
+async def search(ctx, *, query: str = None):
+    if query is None:
+        await ctx.send("Please provide a search query.")
+        return
+    if not ctx.author.voice:
+        await ctx.send("You must be in a voice channel.")
+        return
+    await ctx.send(f"Searching for: {query}")
+    loop = asyncio.get_running_loop()
+    try:
+        data = await loop.run_in_executor(
+            None,
+            lambda: yt_dlp.YoutubeDL({
+                'quiet': True,
+                'extract_flat': True,
+                'default_search': 'ytsearch15',  # fetch 15 results for pagination
+                'extractor_args': {'youtube': {'js_runtimes': ['node']}}
+            }).extract_info(f"ytsearch15:{query}", download=False)
+        )
+    except yt_dlp.utils.DownloadError as e:
+        logger.error(f"Error during search for query '{query}': {e}")
+        await ctx.send(f"Error during search: {e}")
+        return
+    results = []
+    for entry in data.get('entries', []):
+        if entry is None:
+            continue
+        results.append({
+            "url": entry.get('url') or f"https://www.youtube.com/watch?v={entry['id']}",
+            "title": entry.get('title', 'Unknown Title'),
+            "uploader": entry.get('uploader', 'Unknown Uploader'),
+            "duration": entry.get('duration', 0)
+        })
+    if not results:
+        logger.warning(f"No search results found for query: '{query}'")
+        await ctx.send("No results found.")
+        return
+    view = SearchView(ctx, results)
+    message = await ctx.send(embed=view.build_embed(), view=view)
+    view.message = message
 
 # @bot.command(help="Ask and you shall recieve")
 # async def cat_boy(ctx):
@@ -468,6 +690,7 @@ async def on_command_error(ctx, error):
     elif isinstance(error, commands.BadArgument):
         await ctx.send(f"Invalid argument. Use `!help {ctx.command.name}` for usage info.")
     else:
+        logger.error(f"Unhandled error in command '{ctx.command}': {error}")
         await ctx.send(f"An error occurred: {str(error)}")
 #===========================================
 # ---------------- READY -------------------
@@ -477,6 +700,7 @@ async def on_command_error(ctx, error):
 async def on_ready():
     if not hasattr(bot, 'synced'):
         bot.synced = True
-        print(f"{bot.user} is ready!")
+        await bot.change_presence(status=discord.Status.online)
+        logger.info(f"{bot.user} has connected to Discord.")
 
 bot.run(TOKEN)
