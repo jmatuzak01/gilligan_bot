@@ -1,5 +1,5 @@
 # bot.py
-import os,random,asyncio,discord,yt_dlp,logging
+import os,random,asyncio,discord,yt_dlp,logging,pathlib
 from discord.ext import commands
 from dotenv import load_dotenv
 from logging.handlers import RotatingFileHandler
@@ -147,7 +147,6 @@ async def play_next(ctx):
     )
     #STOPED LOGGING FOR NOW
     #^^^^^^^^^^^^^^^^^^^^^^
-    #
     logger.info(f"[Guild {guild_id}] Now playing: {next_song['title']} (requested by {ctx.author})")
     ctx.voice_client.play(
         source,
@@ -429,6 +428,18 @@ async def shuffle(ctx):
     random.shuffle(music_queues[guild_id])
     await ctx.send("The queue has been shuffled.")
 
+# @bot.command(help="Ask and you shall recieve")
+# async def cat_boy(ctx):
+#     valid_extensions = {".jpg", ".jpeg", ".png", ".gif", ".webp",".gif"}
+#     all_files = [
+#         f for f in image_dir.rglob("*")
+#         if f.is_file() and f.suffix.lower() in valid_extensions
+#     ]
+#     if not all_files:
+#         await ctx.send("No images found.")
+#         return
+#     random_file = random.choice(all_files)
+#     await ctx.send(file=discord.File(random_file))
 #===========================================
 # ------------- ERROR HANDLERS -------------
 #===========================================
