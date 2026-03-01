@@ -17,3 +17,14 @@
 2026-02-28 22:00:47 - INFO - [Guild 693504535552852040] Now playing: Riches and Glory (requested by loobnoob)
 2026-02-28 23:09:09 - DEBUG - [Guild 693504535552852040] play_next called
 2026-02-28 23:09:09 - WARNING - Bot was disconnected from voice channel in guild 693504535552852040. Clearing queue and now playing.
+2026-02-28 23:21:33 - INFO - Cooler Gilligan#4407 has connected to Discord.
+2026-02-28 23:30:09 - INFO - Fetching audio data for query: https://www.youtube.com/watch?v=tVV7ijh01jo&list=PL480A36B593520453
+2026-02-28 23:30:11 - DEBUG - [Guild 1344315785769652284] play_next called
+2026-02-28 23:30:11 - DEBUG - Resolving audio URL: https://www.youtube.com/watch?v=tVV7ijh01jo
+2026-02-28 23:30:12 - INFO - [Guild 1344315785769652284] Now playing: The Fellowship of the Ring Soundtrack-01-The Prophecy (requested by loobnoob)
+2026-02-28 23:32:21 - DEBUG - [Guild 1344315785769652284] play_next called
+2026-02-28 23:32:21 - DEBUG - Resolving audio URL: https://www.youtube.com/watch?v=_pGaz_qN0cw
+2026-02-28 23:32:22 - INFO - [Guild 1344315785769652284] Now playing: The Fellowship of the Ring Soundtrack-02-Concerning Hobbits (requested by loobnoob)
+2026-02-28 23:35:17 - DEBUG - [Guild 1344315785769652284] play_next called
+2026-02-28 23:35:17 - DEBUG - Resolving audio URL: https://www.youtube.com/watch?v=ZYWM4LmuSpc
+2026-02-28 23:35:18 - INFO - [Guild 1344315785769652284] Now playing: The Fellowship of the Ring ST-03-The Shadow of the Past (requested by loobnoob)
