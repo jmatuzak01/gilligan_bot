@@ -10,3 +10,10 @@
 2026-02-28 18:38:05 - INFO - [Guild 693504535552852040] Now playing: (Epic Adventure Music) - The Adventure Kingdom (requested by loobnoob)
 2026-02-28 18:38:32 - INFO - Fetching audio data for query: https://www.youtube.com/watch?v=mXj6zANhajs&list=PLq9HPuSMX_baEYpo_upFymIMWyfUrPXEj
 2026-02-28 18:39:15 - DEBUG - [Guild 693504535552852040] play_next called
+2026-02-28 22:00:36 - INFO - Cooler Gilligan#4407 has connected to Discord.
+2026-02-28 22:00:44 - INFO - Fetching audio data for query: https://www.youtube.com/watch?v=n10Jy_oWpN4&list=PLFiaw141BRIQK6gx--l61zycJWQXkJpWg
+2026-02-28 22:00:46 - DEBUG - [Guild 693504535552852040] play_next called
+2026-02-28 22:00:46 - DEBUG - Resolving audio URL: https://www.youtube.com/watch?v=n10Jy_oWpN4
+2026-02-28 22:00:47 - INFO - [Guild 693504535552852040] Now playing: Riches and Glory (requested by loobnoob)
+2026-02-28 23:09:09 - DEBUG - [Guild 693504535552852040] play_next called
+2026-02-28 23:09:09 - WARNING - Bot was disconnected from voice channel in guild 693504535552852040. Clearing queue and now playing.

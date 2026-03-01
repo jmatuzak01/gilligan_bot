@@ -63,8 +63,8 @@ ytdl_playlist_options = {
 }
 
 ffmpeg_options = {
-    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-    'options': '-vn'
+    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5 -timeout 10000000',
+    'options': '-vn -bufsize 512k'
 }
 
 ytdl_playlist = yt_dlp.YoutubeDL(ytdl_playlist_options)
@@ -692,6 +692,18 @@ async def on_command_error(ctx, error):
     else:
         logger.error(f"Unhandled error in command '{ctx.command}': {error}")
         await ctx.send(f"An error occurred: {str(error)}")
+
+@bot.event
+async def on_voice_state_update(member, before, after):
+    if member.id != bot.user.id:
+        return
+    # If the bot was disconnected from a voice channel, clear the queue and now playing
+    if before.channel is not None and after.channel is None:
+        guild_id = before.channel.guild.id
+        logger.warning(f"Bot was disconnected from voice channel in guild {guild_id}. Clearing queue and now playing.")
+        music_queues.pop(guild_id, None)
+        now_playing.pop(guild_id, None)
+        is_stopping.pop(guild_id, None)
 #===========================================
 # ---------------- READY -------------------
 #===========================================
