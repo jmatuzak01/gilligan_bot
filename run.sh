@@ -1,2 +1,2 @@
 source .venv/bin/activate
-python gilligan.py
+python bot.py
